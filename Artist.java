@@ -1,43 +1,41 @@
-import java.util.ArrayList;
-import java.util.List;
-
 public class Artist {
-    private String nom;
-    private String categorie;
-    private List<Edge> connections;
-
-    public Artist(String nom, String categorie) {
-        this.nom = nom;
-        this.categorie = categorie;
-        this.connections = new ArrayList<>();
+    private int id;
+    private String name;
+    private String description;
+    
+    public Artist(int id, String name, String description) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
     }
-
-    public String getNom() {
-        return nom;
+    
+    public int getId() {
+        return id;
     }
-
-    public String getCategorie() {
-        return categorie;
+    
+    public String getName() {
+        return name;
     }
-
-    public List<Edge> getConnections() {
-        return connections;
+    
+    public String getDescription() {
+        return description;
     }
-
-    public void addConnection(Edge e) {
-        connections.add(e);
+    
+    @Override
+    public String toString() {
+        return name + " (" + description + ")";
     }
-
-    // Setters si nécessaire
-    public void setNom(String nom) {
-        this.nom = nom;
+    
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Artist)) return false;
+        Artist artist = (Artist) o;
+        return id == artist.id;
     }
-
-    public void setCategorie(String categorie) {
-        this.categorie = categorie;
-    }
-
-    public void setConnections(List<Edge> connections) {
-        this.connections = connections;
+    
+    @Override
+    public int hashCode() {
+        return Integer.hashCode(id);
     }
 }

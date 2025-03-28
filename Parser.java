@@ -1,55 +1,73 @@
-import java.util.Map;
-import java.util.List;
-import java.util.HashMap;
-import java.util.ArrayList;
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
+import java.util.*;
 
 public class Parser {
-
-    // Méthode pour parser le fichier artists.txt
-    public static Map<String, Artist> parseArtists(String filename) {
-        Map<String, Artist> artistsMap = new HashMap<>();
+    
+    public static List<String> parseCSVLine(String line) {
+        List<String> fields = new ArrayList<>();
+        StringBuilder sb = new StringBuilder();
+        boolean inQuotes = false;
+        
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '"') {
+                if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    sb.append('"');
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (c == ',' && !inQuotes) {
+                fields.add(sb.toString());
+                sb = new StringBuilder();
+            } else {
+                sb.append(c);
+            }
+        }
+        fields.add(sb.toString());
+        return fields;
+    }
+    
+    private static String cleanField(String field) {
+        return field.trim();
+    }
+    
+    public static Map<Integer, Artist> parseArtists(String filename) {
+        Map<Integer, Artist> artistsById = new HashMap<>();
         try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
             String line;
             while ((line = br.readLine()) != null) {
-                String[] parts = line.split(",");
-                if (parts.length > 2) {  // On attend : ID, Nom, Catégorie
-                    String artistId = parts[0].trim();
-                    String artistName = parts[1].trim();
-                    String categorie = parts[2].trim();
-                    Artist artist = new Artist(artistName, categorie);
-                    artistsMap.put(artistId, artist);
-                }
+                if (line.trim().isEmpty()) continue;
+                List<String> parts = parseCSVLine(line);
+                if (parts.size() < 3) continue;
+                int id = Integer.parseInt(cleanField(parts.get(0)));
+                String name = cleanField(parts.get(1));
+                String description = cleanField(parts.get(2));
+                Artist artist = new Artist(id, name, description);
+                artistsById.put(id, artist);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return artistsMap;
+        return artistsById;
     }
-
-    // Méthode pour parser le fichier mentions.txt
-    public static List<Edge> parseMentions(String filename, Map<String, Artist> artistsMap) {
+    
+    public static List<Edge> parseMentions(String filename, Map<Integer, Artist> artistsById) {
         List<Edge> edges = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
             String line;
             while ((line = br.readLine()) != null) {
-                String[] parts = line.split(",");
-                if (parts.length == 3) {
-                    String artist1Id = parts[0].trim();
-                    String artist2Id = parts[1].trim();
-                    int mentions = Integer.parseInt(parts[2].trim());
-
-                    // Récupérer les artistes par leur ID
-                    Artist artist1 = artistsMap.get(artist1Id);
-                    Artist artist2 = artistsMap.get(artist2Id);
-
-                    if (artist1 != null && artist2 != null) {
-                        Edge edge = new Edge(artist1, artist2, mentions);
-                        edges.add(edge);
-                    }
-                }
+                if (line.trim().isEmpty()) continue;
+                List<String> parts = parseCSVLine(line);
+                if (parts.size() < 3) continue;
+                int sourceId = Integer.parseInt(cleanField(parts.get(0)));
+                int destId = Integer.parseInt(cleanField(parts.get(1)));
+                int mentions = Integer.parseInt(cleanField(parts.get(2)));
+                Artist source = artistsById.get(sourceId);
+                Artist dest = artistsById.get(destId);
+                if (source == null || dest == null) continue;
+                double weight = 1.0 / mentions;
+                edges.add(new Edge(source, dest, weight));
             }
         } catch (IOException e) {
             e.printStackTrace();

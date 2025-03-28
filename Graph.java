@@ -1,189 +1,156 @@
 import java.util.*;
-import java.util.stream.Collectors;
+import java.io.*;
 
 public class Graph {
-    // Attribut pour stocker les artistes (clé = ID)
-    private Map<String, Artist> artistes;
-
-    public Graph(String fileArtists, String fileMentions) {
-        // Charger les artistes depuis le fichier
-        artistes = Parser.parseArtists(fileArtists);
-
-        // Charger les connexions depuis le fichier mentions.txt
-        List<Edge> edges = Parser.parseMentions(fileMentions, artistes);
-
-        // Ajouter chaque edge aux deux artistes (graphe non orienté)
+    private Map<String, Artist> artistsByName;
+    private Map<Artist, List<Edge>> adjacencyList;
+    
+    public Graph(String artistsFile, String mentionsFile) {
+        // Parse des artistes
+        Map<Integer, Artist> artistsById = Parser.parseArtists(artistsFile);
+        artistsByName = new HashMap<>();
+        for (Artist artist : artistsById.values()) {
+            artistsByName.put(artist.getName(), artist);
+        }
+        
+        // Construction de la liste d'adjacence en filtrant les doublons
+        adjacencyList = new HashMap<>();
+        List<Edge> edges = Parser.parseMentions(mentionsFile, artistsById);
         for (Edge edge : edges) {
-            edge.getSource().addConnection(edge);
-            edge.getDestination().addConnection(edge);
-        }
-    }
-
-    /**
-     * Méthode utilisant BFS pour trouver le chemin le plus court (en nombre d'arêtes)
-     * entre deux artistes. Le coût total est calculé en sommant le poids (1/mentions)
-     * de chaque arête empruntée.
-     */
-    public void trouverCheminLePlusCourt(String depart, String arrivee) {
-        // Recherche des artistes par leur nom
-        Artist artisteDepart = null;
-        Artist artisteArrivee = null;
-        for (Artist artist : artistes.values()) {
-            if (artist.getNom().equals(depart))
-                artisteDepart = artist;
-            if (artist.getNom().equals(arrivee))
-                artisteArrivee = artist;
-        }
-        if (artisteDepart == null || artisteArrivee == null) {
-            throw new RuntimeException("Artiste non trouvé");
-        }
-
-        // Initialisation des structures pour le BFS
-        Queue<Artist> file = new LinkedList<>();
-        Map<Artist, Artist> precedent = new HashMap<>();   // pour reconstituer le chemin
-        Map<Artist, Edge> prevEdge = new HashMap<>();        // pour mémoriser l'edge utilisée
-        Set<Artist> visites = new HashSet<>();
-
-        file.add(artisteDepart);
-        visites.add(artisteDepart);
-
-        Artist trouve = null;
-        // Parcours en largeur
-        while (!file.isEmpty()) {
-            Artist courant = file.poll();
-            if (courant.equals(artisteArrivee)) {
-                trouve = courant;
-                break;
-            }
-            for (Edge edge : courant.getConnections()) {
-                // getOtherEnd retourne l'autre artiste de l'edge
-                Artist voisin = edge.getOtherEnd(courant);
-                if (!visites.contains(voisin)) {
-                    visites.add(voisin);
-                    precedent.put(voisin, courant);
-                    prevEdge.put(voisin, edge);  // mémoriser l'arête utilisée pour atteindre 'voisin'
-                    file.add(voisin);
+            Artist source = edge.getSource();
+            Artist dest = edge.getDestination();
+            List<Edge> list = adjacencyList.computeIfAbsent(source, k -> new ArrayList<>());
+            boolean found = false;
+            for (int i = 0; i < list.size(); i++) {
+                Edge existing = list.get(i);
+                if (existing.getDestination().equals(dest)) {
+                    // Remplacer si on trouve une arête avec un poids supérieur (moins forte)
+                    if (edge.getWeight() < existing.getWeight()) {
+                        list.set(i, edge);
+                    }
+                    found = true;
+                    break;
                 }
             }
-        }
-
-        if (trouve == null) {
-            throw new IllegalArgumentException("Aucun chemin trouvé");
-        }
-
-        // Reconstruction du chemin depuis l'artiste d'arrivée
-        List<Artist> chemin = new ArrayList<>();
-        for (Artist a = trouve; a != null; a = precedent.get(a)) {
-            chemin.add(a);
-        }
-        Collections.reverse(chemin);
-
-        // Calcul du coût total en sommant les poids des edges utilisées
-        double coutTotal = 0;
-        for (int i = 1; i < chemin.size(); i++) {
-            Edge edgeUtilisee = prevEdge.get(chemin.get(i));
-            coutTotal += edgeUtilisee.getPoids();
-        }
-
-        // Affichage du résultat
-        System.out.println("Longueur du chemin : " + (chemin.size() - 1));
-        System.out.println("Coût total du chemin : " + coutTotal);
-        System.out.println("Chemin :");
-        for (Artist artist : chemin) {
-            System.out.println(artist.getNom() + " (" + artist.getCategorie() + ")");
+            if (!found) {
+                list.add(edge);
+            }
         }
     }
-
-    /**
-     * Méthode utilisant l'algorithme de Dijkstra pour trouver le chemin à coût minimum,
-     * c'est-à-dire le chemin qui maximise les mentions (puisque le poids = 1/mentions).
-     */
-    public void trouverCheminMaxMentions(String depart, String arrivee) {
-        // Recherche des artistes par leur nom
-        Artist artisteDepart = null;
-        Artist artisteArrivee = null;
-        for (Artist artist : artistes.values()) {
-            if (artist.getNom().equals(depart))
-                artisteDepart = artist;
-            if (artist.getNom().equals(arrivee))
-                artisteArrivee = artist;
+    
+    public void trouverCheminLePlusCourt(String startName, String endName) {
+        Artist start = artistsByName.get(startName);
+        Artist end = artistsByName.get(endName);
+        if (start == null || end == null) {
+            throw new RuntimeException("Artiste non trouvé.");
         }
-        if (artisteDepart == null || artisteArrivee == null) {
-            throw new RuntimeException("Artiste non trouvé");
-        }
-
-        // Initialisation des distances : 0 pour le départ, +∞ pour les autres
-        Map<Artist, Double> distances = new HashMap<>();
-        for (Artist a : artistes.values()) {
-            distances.put(a, Double.POSITIVE_INFINITY);
-        }
-        distances.put(artisteDepart, 0.0);
-
-        // Map pour mémoriser le prédécesseur de chaque artiste (pour reconstituer le chemin)
-        Map<Artist, Artist> precedent = new HashMap<>();
-
-        // PriorityQueue pour traiter les artistes selon le coût cumulé
-        PriorityQueue<Pair> queue = new PriorityQueue<>(Comparator.comparingDouble(Pair::getCost));
-        queue.add(new Pair(artisteDepart, 0.0));
-
+        
+        // BFS standard en enregistrant le parent
+        Map<Artist, Artist> parent = new HashMap<>();
+        Queue<Artist> queue = new LinkedList<>();
+        Set<Artist> visited = new HashSet<>();
+        queue.add(start);
+        visited.add(start);
+        
         while (!queue.isEmpty()) {
-            Pair currentPair = queue.poll();
-            Artist courant = currentPair.getArtist();
-            double coutCourant = currentPair.getCost();
-
-            if (courant.equals(artisteArrivee)) {
-                break;
-            }
-
-            for (Edge edge : courant.getConnections()) {
-                Artist voisin = edge.getOtherEnd(courant);
-                double nouveauCost = coutCourant + edge.getPoids();
-                if (nouveauCost < distances.get(voisin)) {
-                    distances.put(voisin, nouveauCost);
-                    precedent.put(voisin, courant);
-                    queue.add(new Pair(voisin, nouveauCost));
+            Artist current = queue.poll();
+            if (current.equals(end)) break;
+            List<Edge> edges = adjacencyList.get(current);
+            if (edges != null) {
+                for (Edge edge : edges) {
+                    Artist neighbor = edge.getDestination();
+                    if (!visited.contains(neighbor)) {
+                        visited.add(neighbor);
+                        parent.put(neighbor, current);
+                        queue.add(neighbor);
+                    }
                 }
             }
         }
-
-        if (distances.get(artisteArrivee) == Double.POSITIVE_INFINITY) {
-            throw new IllegalArgumentException("Aucun chemin trouvé");
+        
+        if (!visited.contains(end)) {
+            throw new RuntimeException("Aucun chemin entre " + startName + " et " + endName);
         }
-
-        // Reconstruction du chemin depuis l'artiste d'arrivée
-        List<Artist> chemin = new ArrayList<>();
-        for (Artist a = artisteArrivee; a != null; a = precedent.get(a)) {
-            chemin.add(a);
+        
+        // Reconstruction du chemin selon le parent découvert
+        List<Artist> path = new ArrayList<>();
+        for (Artist cur = end; cur != null; cur = parent.get(cur)) {
+            path.add(0, cur);
         }
-        Collections.reverse(chemin);
-
-        // Affichage du résultat
-        System.out.println("Longueur du chemin : " + (chemin.size() - 1));
-        System.out.println("Coût total du chemin : " + distances.get(artisteArrivee));
-        System.out.println("Chemin :");
-        for (Artist artist : chemin) {
-            System.out.println(artist.getNom() + " (" + artist.getCategorie() + ")");
+        
+        // Calcul du coût total : pour chaque segment, utiliser l'unique arête filtrée
+        double totalCost = 0.0;
+        Artist current = end;
+        while (!current.equals(start)) {
+            Artist p = parent.get(current);
+            double w = 0.0;
+            for (Edge e : adjacencyList.get(p)) {
+                if (e.getDestination().equals(current)) {
+                    w = e.getWeight();
+                    break;
+                }
+            }
+            totalCost += w;
+            current = p;
         }
+        
+        printPath(path, totalCost);
     }
-
-    /**
-     * Classe auxiliaire pour associer un artiste à son coût cumulé dans l'algorithme de Dijkstra.
-     */
-    private static class Pair {
-        private Artist artist;
-        private double cost;
-
-        public Pair(Artist artist, double cost) {
-            this.artist = artist;
-            this.cost = cost;
+    
+    public void trouverCheminMaxMentions(String startName, String endName) {
+        Artist start = artistsByName.get(startName);
+        Artist end = artistsByName.get(endName);
+        if (start == null || end == null) {
+            throw new RuntimeException("Artiste non trouvé.");
         }
-
-        public Artist getArtist() {
-            return artist;
+        
+        Map<Artist, Double> dist = new HashMap<>();
+        Map<Artist, Artist> prev = new HashMap<>();
+        for (Artist a : artistsByName.values()) {
+            dist.put(a, Double.POSITIVE_INFINITY);
         }
-
-        public double getCost() {
-            return cost;
+        dist.put(start, 0.0);
+        
+        PriorityQueue<Artist> pq = new PriorityQueue<>(Comparator.comparingDouble(dist::get));
+        pq.add(start);
+        
+        while (!pq.isEmpty()) {
+            Artist current = pq.poll();
+            if (current.equals(end))
+                break;
+            List<Edge> edges = adjacencyList.get(current);
+            if (edges != null) {
+                for (Edge edge : edges) {
+                    Artist neighbor = edge.getDestination();
+                    double alt = dist.get(current) + edge.getWeight();
+                    if (alt < dist.get(neighbor)) {
+                        dist.put(neighbor, alt);
+                        prev.put(neighbor, current);
+                        pq.add(neighbor);
+                    }
+                }
+            }
+        }
+        
+        if (dist.get(end) == Double.POSITIVE_INFINITY) {
+            throw new RuntimeException("Aucun chemin entre " + startName + " et " + endName);
+        }
+        
+        List<Artist> path = new ArrayList<>();
+        for (Artist at = end; at != null; at = prev.get(at)) {
+            path.add(0, at);
+        }
+        
+        double totalCost = dist.get(end);
+        printPath(path, totalCost);
+    }
+    
+    private void printPath(List<Artist> path, double totalCost) {
+        System.out.println("Longueur du chemin : " + (path.size() - 1));
+        System.out.println("Coût total du chemin : " + totalCost);
+        System.out.println("Chemin :");
+        for (Artist a : path) {
+            System.out.println(a);
         }
     }
 }
