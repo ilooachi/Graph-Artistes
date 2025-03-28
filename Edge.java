@@ -1,7 +1,7 @@
 public class Edge {
     private Artist source;
     private Artist destination;
-    private double weight;
+    private double weight;  // poids = 1/mentions
     
     public Edge(Artist source, Artist destination, double weight) {
         this.source = source;

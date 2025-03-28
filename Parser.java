@@ -7,13 +7,12 @@ public class Parser {
         List<String> fields = new ArrayList<>();
         StringBuilder sb = new StringBuilder();
         boolean inQuotes = false;
-        
         for (int i = 0; i < line.length(); i++) {
             char c = line.charAt(i);
             if (c == '"') {
                 if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
                     sb.append('"');
-                    i++;
+                    i++; // sauter le guillemet échappé
                 } else {
                     inQuotes = !inQuotes;
                 }
@@ -67,6 +66,7 @@ public class Parser {
                 Artist dest = artistsById.get(destId);
                 if (source == null || dest == null) continue;
                 double weight = 1.0 / mentions;
+                // Ajout de toutes les arêtes, sans filtrage
                 edges.add(new Edge(source, dest, weight));
             }
         } catch (IOException e) {
